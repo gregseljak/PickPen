@@ -60,7 +60,14 @@ class Wavegen():
         if self.samples is None:
             logging.error("self.samples is None; nothing to export")
             return None
-        np.savez(filename)
+        d = 0
+        if os.exists(filename):
+            while os.path.exists("./" + filename + "_" + str(d)):
+                d += 1
+                logging.warning(f"{"./" + filename + "_" + str(d)} already exists")
+            filename = filename + "_" + str(d)
+            
+        np.savez("./" + filename + "/" + filename)
 
 
 wavg = Wavegen()
