@@ -4,16 +4,16 @@ import os
 if __name__ != "__main__":
     import __main__ as main
 
+
+
 CONF_LEARN = {
     'general': {
-        'fname_in': ("./identity.lor", 'Number of grid points in the horizontal direction.'),
-        'fname_out': ("./output.pth", 'Number of grid points in the vertical direction.'),
+        'fname_in': ("./cscale.cos", 'Number of grid points in the horizontal direction.'),
         'model_name': (""),
         'parameters': ["temp", "spin"],
         'combine_channels': "true, false: degenerate channels?",
     },
     'hyperparameters': {
-        # The general/hyperparameters division is purely superficial
         'kernel_size': (41, 'first convolutional kernel size'),
         'lr': (0.01, 'Learning Rate'),
         'epochs': (1),
@@ -25,16 +25,16 @@ CONF_LEARN = {
 CONF_MAKE = {
     "general" : { 
         "score" : 12345,
-        "nb_samples" : 10,
+        "nb_samples" : 25,
         "nb_channels" : 1,
         "duration" : 1,
         "bitrate" : 14400,
         "seed": 12345,
     },
     "variations" : {
-        "y_1" : 0,
+        "range" : [-12, 13],
         "y_2" : 0,
-        "noise"       : 0.2,
+        "noise"       : 0,
         "noisetype" : "normal",
         "monotone" : True,
     },
@@ -44,7 +44,7 @@ CONF_MAKE = {
 
 class TConfig():
     def __init__(self, parfile=False, filetype=None):
-        self.configs = {"pkpn_learn" : CONF_LEARN, #default
+        self.configs = {"pkpn_train" : CONF_LEARN, #default
             "pkpn_synthgen" : CONF_MAKE,
             }
         if filetype != None:
@@ -65,7 +65,7 @@ class TConfig():
         self._update_members()
 
     def _update_members(self):
-        """Read a TOML par file and update configuration attributes accordingly."""
+        """Read a TOML par file and update tconfig attributes accordingly."""
  
         for section, opts in self.dict.items():
             if section not in self.configs[self.filetype]:
@@ -106,6 +106,13 @@ class TConfig():
                 contents += (f" {item} :: {value} \n")
         return contents
         
+    def update_tconfig(self, target):
+        """ scan target for matching attribute names and update """
+        for section in self.dict:
+            for item in self.dict[section]:
+                if hasattr(target, str(item)):
+                    setattr(self, str(item), getattr(target, str(item)))
+
     def save_toml(self, directory):
         """updates the state dictionary to match attributes, then dumps it"""
 
