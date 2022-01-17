@@ -35,6 +35,7 @@ class Wavegen():
         for section in self.tconfig.dict:
             for item in self.tconfig.dict[section]:
                 setattr(self, str(item), getattr(tconfig, str(item)))
+        tconfig.parent = self
 
     @property
     def time(self):
@@ -107,8 +108,8 @@ class Wavegen():
             outdir += comment
         os.mkdir(outdir)
         np.savez("./" + outdir + "/xdata.npz", self.samples)
-        np.save("./" + outdir + "/ydata.txt", self.yvals)
-        self.tconfig.update_tconfig(self)
+        np.save("./" + outdir + "/ydata", self.yvals)
+        self.tconfig.update_tconfig()
         self.tconfig.save_toml("./"+outdir+"/config.toml")
         logger.info(f" Dumped to {outdir}")
 
@@ -150,7 +151,8 @@ def main():
     wavg.draw_yvals()
     wavg.generate_samples()
     wavg.export_npz()
-    #plt.legend()
+    wavg.plot_samples(4)
+    plt.legend()
     plt.show()
 
 if __name__ == "__main__":

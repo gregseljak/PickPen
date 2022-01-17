@@ -12,21 +12,21 @@ import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
-def initialize_CNN(input_size, output_size, tconfig):
+def initialize_CNN(x_data, y_data, tconfig):
     """ creates a model for learning temperature (without noise)
 
     :input_size: (int) dim of the input
     :output_size: (int) dim of the output
     :returns: a model architecture from model_library, ready to train
     """
-    model = getattr(model_library, tconfig.model_name)(input_size, output_size)
+    model = getattr(model_library, tconfig.model_name)(x_data, y_data)
     return model
 
 def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_func = torch.nn.MSELoss(reduction="none")
     par_ct = y_data.shape[-1]
-    x, y = grad.Variable(x_data), grad.Variable(y_data)
+    x, y = grad.Variable(torch.from_numpy(x_data)), grad.Variable(torch.from_numpy(y_data))
     torch_dataset = Data.TensorDataset(x, y)
     dataset_size = len(torch_dataset)
     valid_size = int(valid_split * dataset_size)
@@ -92,20 +92,51 @@ def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
         +f" std_err valid {np.round(epoch_ste[epoch, 1, :], precision)}")
     return epoch_loss, epoch_ste
 
+def quickload(dirname):
+    x_data = np.load("./" + dirname + "/xdata.npz")
+    x_data = x_data[(x_data.__dict__["files"])[0]]
+    y_data = np.load("./"+ dirname + "/ydata.npy")
+    while np.ndim(y_data) < 3:
+        y_data = np.expand_dims(y_data, -1)
+    logger.info("      Quickload successful")
+    logger.info("__________________________")
+    logger.info(f" x_data.shape {x_data.shape}")
+    logger.info(f" y_data.shape {y_data.shape}")
+    logger.info(f" __________________________\n")
+    return x_data, y_data
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", default=argparse.SUPPRESS, type=int, 
+    parser.add_argument("-v", type=int, default=3,
+        help=("set logging level: 0 critical, 1 error, "
+                "2 warning, 3 info, 4 debug, default=info"))
+    parser.add_argument("-i", default=None, type=str,
+        help="training/validation dataset")
+    parser.add_argument("-e", default=None, type=int, 
         help='epochs')
-    parser.add_argument("-lr", type=float, default=argparse.SUPPRESS, 
+    parser.add_argument("-lr", type=float, default=None, 
         help=" -log10 of learning rate (ex. 2 -> 0.01)")
     parser.add_argument("-t", type=str, default=None,
                         help="See toml_config.py")
-    
+
+    config = toml_config.TConfig()
     args = parser.parse_args()
-    config = toml_config.TConfig(args.t)
+
+    logging_translate = [logging.CRITICAL, logging.ERROR, logging.WARNING,
+                         logging.INFO, logging.DEBUG]
+    logger = None
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        level=logging_translate[args.v])
+    logger = logging.getLogger(__name__)
+
+    if args.t:
+        config = toml_config.TConfig(args.t)
+    config.model_name = "starter"
     config.translate_args(parser)
-    print(config.summary_str())
+    x_data, y_data = quickload("n25_16d01m_09H44M")
+    model = initialize_CNN(x_data, y_data, config)
+    e_std, e_ste = train_CNN(model, x_data, y_data, 4, 20, 0.01)
 if __name__ == "__main__":
     main()
 

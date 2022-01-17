@@ -9,8 +9,7 @@ if __name__ != "__main__":
 CONF_LEARN = {
     'general': {
         'fname_in': ("./cscale.cos", 'Number of grid points in the horizontal direction.'),
-        'model_name': (""),
-        'parameters': ["temp", "spin"],
+        'model_name': "starter",
         'combine_channels': "true, false: degenerate channels?",
     },
     'hyperparameters': {
@@ -34,7 +33,7 @@ CONF_MAKE = {
     "variations" : {
         "range" : [-12, 13],
         "y_2" : 0,
-        "noise"       : 0,
+        "noise"       : 0.05,
         "noisetype" : "normal",
         "monotone" : True,
     },
@@ -63,6 +62,7 @@ class TConfig():
         else:
             self.dict = self.configs[self.filetype]
         self._update_members()
+        self.parent=None
 
     def _update_members(self):
         """Read a TOML par file and update tconfig attributes accordingly."""
@@ -106,12 +106,12 @@ class TConfig():
                 contents += (f" {item} :: {value} \n")
         return contents
         
-    def update_tconfig(self, target):
+    def update_tconfig(self):
         """ scan target for matching attribute names and update """
         for section in self.dict:
             for item in self.dict[section]:
-                if hasattr(target, str(item)):
-                    setattr(self, str(item), getattr(target, str(item)))
+                if hasattr(self.parent, str(item)):
+                    setattr(self, str(item), getattr(self.parent, str(item)))
 
     def save_toml(self, directory):
         """updates the state dictionary to match attributes, then dumps it"""
@@ -121,3 +121,4 @@ class TConfig():
                 self.dict[section][item] = getattr(self, item)
         with open(directory, "w") as toml_file:
             toml.dump(self.dict, toml_file)
+
