@@ -134,9 +134,9 @@ def main():
         config = toml_config.TConfig(args.t)
     config.model_name = "starter"
     config.translate_args(parser)
-    x_data, y_data = quickload("n25_16d01m_09H44M")
+    x_data, y_data = quickload("cos_n256")
     model = initialize_CNN(x_data, y_data, config)
-    e_std, e_ste = train_CNN(model, x_data, y_data, 4, 20, 0.01)
+    e_std, e_ste = train_CNN(model, x_data, y_data, 32, config.epochs, 0.01)
 if __name__ == "__main__":
     main()
 

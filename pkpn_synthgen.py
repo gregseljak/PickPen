@@ -7,6 +7,9 @@ from datetime import datetime
 #import model_library
 import toml_config
 
+c_scale = np.array([261.63, 293.66, 329.63, 349.23, 392.00,
+440.00, 493.88, 523.25]) # from c4 to c5,  inclusive
+
 class Wavegen():
 
     def __init__(self, tconfig):
@@ -43,7 +46,7 @@ class Wavegen():
     
     @time.getter
     def time(self):
-        self._time = np.linspace(0, self.duration, self.bitrate*self.duration)
+        self._time = np.linspace(0, self.duration, int(self.bitrate*self.duration))
         return self._time
 
     @property
@@ -57,16 +60,16 @@ class Wavegen():
 
     def draw_yvals(self):
         logger.info("drawing yvals")
-        #self.yvals = self._rs.uniform(0,1,self.nb_samples)
-        self.yvals = np.arange(self.range[0], self.range[1], 1)
+        self.yvals = np.round(self._rs.uniform(self.range[0], self.range[1]+1,self.nb_samples), decimals=0)
+        #self.yvals = np.arange(self.range[0], self.range[1], 1)
 
     def generate_samples(self):
         if self.yvals is None:
             logger.error("generate_samples() called with no set yvals")
             return None
-        self.samples = np.empty((self.nb_samples, self.nb_channels, self.bitrate*self.duration))
-        for i in range(self.samples.shape[0]):
-            freq = self.yvals[i] * 440
+        self.samples = np.empty((self.nb_samples, self.nb_channels, len(self.time)))
+        for i in range(self.nb_samples):
+            freq = self.fnote(self.yvals[i])
             src_wave = self._waveform(freq)
             for j in range(self.samples.shape[1]):
                 self.samples[i,j,:] = self._add_noise(src_wave)
@@ -113,8 +116,7 @@ class Wavegen():
         self.tconfig.save_toml("./"+outdir+"/config.toml")
         logger.info(f" Dumped to {outdir}")
 
-c_scale = np.array([261.63, 293.66, 329.63, 349.23, 392.00,
-440.00, 493.88, 523.25]) # from c4 to c5,  inclusive
+
 
 logger = logging.getLogger(__name__)
 def main():

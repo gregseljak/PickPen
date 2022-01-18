@@ -15,7 +15,7 @@ CONF_LEARN = {
     'hyperparameters': {
         'kernel_size': (41, 'first convolutional kernel size'),
         'lr': (0.01, 'Learning Rate'),
-        'epochs': (1),
+        'epochs': (100),
         'split': (0.8),
         'batch_size': (64),
     },
@@ -24,7 +24,7 @@ CONF_LEARN = {
 CONF_MAKE = {
     "general" : { 
         "score" : 12345,
-        "nb_samples" : 25,
+        "nb_samples" : 256,
         "nb_channels" : 1,
         "duration" : 1,
         "bitrate" : 14400,
