@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 #import model_library
 import toml_config
+import subprocess
 
 c_scale = np.array([261.63, 293.66, 329.63, 349.23, 392.00,
 440.00, 493.88, 523.25]) # from c4 to c5,  inclusive
@@ -17,10 +18,24 @@ class Wavegen():
         self.state_from_tconfig(tconfig)
         self.a4freq = 440                # in Hz; industry standard
         self._rs = np.random.RandomState(self.seed)
-        self.samples = None
-        self._yvals = None
-        self.keydict = {"A4":0, "Bb4":1, "B4":2, "C4":3, "C#4":4, "D4":5, "D#":6,
-        "E4":7, "F4":8, "F#4":9, "G4":10,"G#4":11, "A5":12}
+        self._scores = None
+        self._yvals = None # 2d: [sample, atk volume]
+        self.duration = 2000 # duration in ms
+        self.bpm = 120
+        self.nb_intervals = 4  #= self.bpm # intervals per sample
+        self.notedict = {"C":0, "C#":1, "D":2, "D#":3,
+            "E":4, "F":5, "F#": 6, "G":7, "G#": 8, "A":9, "Bb":10, "B":11}
+        self.csv_header = '''0,0, Header,1,2,480,
+1,0, Start_track,,,,
+1,0, Time_signature,4,2,24,8
+1,0, Tempo,500000,,,
+1,0, End_track,,,,
+2,0, Start_track,,,,
+2,0, Instrument_name_t," ""Guitar""",,,
+2,0, Program_c,1,0,,\n'''
+        self.csv_footer = '2,' + str(self.duration) + ''', End_track,,,,
+            0,0, End_of_file,,,,'''
+        self.prange = tconfig.range
 
     def state_from_tconfig(self, tconfig):
         """ inherited from configuration file:
@@ -40,14 +55,6 @@ class Wavegen():
                 setattr(self, str(item), getattr(tconfig, str(item)))
         tconfig.parent = self
 
-    @property
-    def time(self):
-        return self._time
-    
-    @time.getter
-    def time(self):
-        self._time = np.linspace(0, self.duration, int(self.bitrate*self.duration))
-        return self._time
 
     @property
     def yvals(self):
@@ -56,69 +63,57 @@ class Wavegen():
     @yvals.setter
     def yvals(self, value):
         self._yvals = value
+        if self.nb_samples != self._yvals.shape[0]:
+            logger.warning(f" Wavegen nb_samples = {self.nb_samples} != yvals.shape[0] = {self._yvals.shape[0]}")
+            self.nb_samples = self._yvals.shape[0]
+            logger.warning(f" Wavegen nb_samples has been updated to {self.nb_samples}")
         self.nb_samples = self._yvals.shape[0]
 
     def draw_yvals(self):
         logger.info("drawing yvals")
-        self.yvals = np.round(self._rs.uniform(self.range[0], self.range[1]+1,self.nb_samples), decimals=0)
-        #self.yvals = np.arange(self.range[0], self.range[1], 1)
-
-    def generate_samples(self):
-        if self.yvals is None:
-            logger.error("generate_samples() called with no set yvals")
-            return None
-        self.samples = np.empty((self.nb_samples, self.nb_channels, len(self.time)))
-        for i in range(self.nb_samples):
-            freq = self.fnote(self.yvals[i])
-            src_wave = self._waveform(freq)
-            for j in range(self.samples.shape[1]):
-                self.samples[i,j,:] = self._add_noise(src_wave)
-        self.samples = self.samples/np.max(self.samples)
-        return self.samples
-
-    def _waveform(self, freq):
-        wave = np.cos(2*np.pi*self.time*freq)
-        return wave
-
-    def _add_noise(self, wave):
-        bitlen = wave.shape[-1]
-        if self.noisetype == "normal":
-            return wave + self._rs.normal(0,self.noise, bitlen)
-        else:
-            return wave
-    
-    def fnote(self, halftone):
-        # equal temper
-        halftone_idx = halftone
-        if isinstance(halftone, str):
-            halftone_idx = self.keydict[halftone]
-        return self.a4freq * 2 **(halftone_idx/12)
-
-    def plot_samples(self, nb_plot=2):
-        time = self.time
-        for i in range(nb_plot):
-            for channel in self.samples[i]:
-                plt.plot(time, channel, color=("C"+str(i)), label=self.yvals[i])
-        return None
-
-    def export_npz(self, comment=None):
+        self.yvals = np.zeros((self.nb_samples, self.nb_intervals, self.prange[-1] - self.prange[0] + 1))
+        for sample in self.yvals:
+            for interval in range(self.nb_intervals):
+                pitch = int(self._rs.uniform(self.prange[0], self.prange[1]+1)) - self.range[0]
+                sample[interval, pitch] = 1
         
-        if self.samples is None:
-            logging.error("self.samples is None; nothing to export")
-            return None
-        outdir = "cos_n" + str(self.nb_samples)
-        if comment:
-            outdir += comment
-        os.mkdir(outdir)
-        np.savez("./" + outdir + "/xdata.npz", self.samples)
-        np.save("./" + outdir + "/ydata", self.yvals)
-        self.tconfig.update_tconfig()
-        self.tconfig.save_toml("./"+outdir+"/config.toml")
-        logger.info(f" Dumped to {outdir}")
+    def generate_scores(self):
+        self._score = ["" for _ in range(self.nb_samples)]
+        interval_len = int(self.duration/self.nb_intervals)
+        time = np.arange(0,self.duration + interval_len, interval_len)
+        print(f"len(time) {len(time)}")
+        for i in range(self.nb_samples):
+            for t in range(len(time)-1):
+                for p in range(len(self.yvals[i,t])):
+                    pitch = self.prange[0] + p
+                    if self.yvals[i][t][p] > 0:
+                        self._score[i] += "2, " + str((time[t]))   + ", note_on_c , 1, " + str(pitch) + ", 81" + "\n"
+                        self._score[i] += "2, " + str((time[t+1])) + ", note_on_c , 1, " + str(pitch) + ", 0"  + "\n"
+                        logger.info(f" Sample {i} : {pitch} at {time[t]}")
 
+    def export_csv(self, outdir, towav=True):
+        absolute_outdir = "/home/greg/PickPen/midi_conversion/"+ outdir + "/"
+        os.mkdir(absolute_outdir)
+        for i in range(self.nb_samples):
+            fullscore = self.csv_header + self._score[i] + self.csv_footer
+            filename = "sample_" + str(i)
+            output = open(absolute_outdir + filename +".csv", "w")
+            output.write(fullscore)
+            output.close()
+            with open(absolute_outdir + 'yvals', 'wb') as f:
+                np.savez(f, self.yvals)
+            self.tconfig.update_tconfig()
+            self.tconfig.save_toml(outdir)
+            if towav:
+                subprocess.run(["midi_conversion/midicsv11/csv2wav.sh", outdir, filename])
 
+    def midi_idx(self, notename):
+        octave = notename[-1]
+        noteval = self.notedict[notename[:-1]]
+        return 12*octave + noteval
 
 logger = logging.getLogger(__name__)
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -149,13 +144,11 @@ def main():
         logger.info(f" args: {args.t}")
 
     wavg = Wavegen(config)
-    logger.debug(config.summary_str())
+    wavg.nb_samples = 4
     wavg.draw_yvals()
-    wavg.generate_samples()
-    wavg.export_npz()
-    wavg.plot_samples(4)
-    plt.legend()
-    plt.show()
+    print(wavg.yvals)
+    wavg.generate_scores()
+    wavg.export_csv("output")
 
 if __name__ == "__main__":
     main()
