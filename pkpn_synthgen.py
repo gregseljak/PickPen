@@ -97,15 +97,14 @@ class Wavegen():
         for i in range(self.nb_samples):
             fullscore = self.csv_header + self._score[i] + self.csv_footer
             filename = "sample_" + str(i)
-            output = open(absolute_outdir + filename +".csv", "w")
-            output.write(fullscore)
-            output.close()
-            with open(absolute_outdir + 'yvals', 'wb') as f:
-                np.savez(f, self.yvals)
-            self.tconfig.update_tconfig()
-            self.tconfig.save_toml(outdir)
+            with open(absolute_outdir + filename +".csv", "w") as output:
+                output.write(fullscore)
+                output.close()
             if towav:
                 subprocess.run(["midi_conversion/midicsv11/csv2wav.sh", outdir, filename])
+        np.savez(absolute_outdir + 'yvals', self.yvals)
+        self.tconfig.update_tconfig()
+        self.tconfig.save_toml(outdir)
 
     def midi_idx(self, notename):
         octave = notename[-1]
