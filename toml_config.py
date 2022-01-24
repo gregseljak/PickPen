@@ -26,12 +26,12 @@ CONF_MAKE = {
         "score" : 12345,
         "nb_samples" : 256,
         "nb_channels" : 1,
-        "duration" : 1,
+        "duration" : 3000,
         "bitrate" : 14400,
         "seed": 12345,
     },
     "variations" : {
-        "range" : [-12, 13],
+        "range" : [60, 80],
         "y_2" : 0,
         "noise"       : 0.05,
         "noisetype" : "normal",
@@ -113,12 +113,14 @@ class TConfig():
                 if hasattr(self.parent, str(item)):
                     setattr(self, str(item), getattr(self.parent, str(item)))
 
-    def save_toml(self, directory):
+    def save_toml(self, directory="./", filename = "config.toml"):
         """updates the state dictionary to match attributes, then dumps it"""
 
         for section in self.dict:   
             for item in self.dict[section]:
                 self.dict[section][item] = getattr(self, item)
-        with open(directory, "w") as toml_file:
+        if not directory.endswith("/"):
+            directory += "/"
+        with open(directory + filename, "w") as toml_file:
             toml.dump(self.dict, toml_file)
 
