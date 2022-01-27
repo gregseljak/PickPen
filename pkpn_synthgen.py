@@ -4,7 +4,7 @@ import logging
 import toml
 import os
 from datetime import datetime
-#import model_library
+import pandas as pd
 import toml_config
 import subprocess
 
@@ -22,7 +22,8 @@ class Wavegen():
         self._yvals = None # 2d: [sample, atk volume]
         self.duration = 2000 # duration in ms
         self.bpm = 120
-        self.nb_intervals = 4  #= self.bpm # intervals per sample
+        self.grain = 0.25  # quarter note
+        self.nb_events_per_grain = 4
         self.notedict = {"C":0, "C#":1, "D":2, "D#":3,
             "E":4, "F":5, "F#": 6, "G":7, "G#": 8, "A":9, "Bb":10, "B":11}
         self.csv_header = '''0,0, Header,1,2,480,
@@ -70,26 +71,35 @@ class Wavegen():
         self.nb_samples = self._yvals.shape[0]
 
     def draw_yvals(self):
+        
+        self.yvals = np.empty((self.nb_samples, self.nb_events_per_grain), dtype = dict)
         logger.info("drawing yvals")
-        self.yvals = np.zeros((self.nb_samples, self.nb_intervals, self.prange[-1] - self.prange[0] + 1))
+        prange = self.prange[-1] - self.prange[0] + 1
         for sample in self.yvals:
-            for interval in range(self.nb_intervals):
-                pitch = int(self._rs.uniform(self.prange[0], self.prange[1]+1)) - self.range[0]
-                sample[interval, pitch] = 1
+            for i in range(len(sample)):
+                time0 = int(i)*500 
+                time1 = time0 + 500 #+ int(np._rs.gaussian(0,5))
+                pitch = int(self._rs.uniform(prange) + self.range[0]) 
+                sample[i] = {"time0":time0, "time1":time1, "pitch":pitch, "vol":81}
         
     def generate_scores(self):
-        self._score = ["" for _ in range(self.nb_samples)]
-        interval_len = int(self.duration/self.nb_intervals)
-        time = np.arange(0,self.duration + interval_len, interval_len)
-        print(f"len(time) {len(time)}")
+        """ This is quite brutal but the csvmidi software requires that the events be chronologically"""
+        self._score = []
         for i in range(self.nb_samples):
-            for t in range(len(time)-1):
-                for p in range(len(self.yvals[i,t])):
-                    pitch = self.prange[0] + p
-                    if self.yvals[i][t][p] > 0:
-                        self._score[i] += "2, " + str((time[t]))   + ", note_on_c , 1, " + str(pitch) + ", 81" + "\n"
-                        self._score[i] += "2, " + str((time[t+1])) + ", note_on_c , 1, " + str(pitch) + ", 0"  + "\n"
-                        logger.info(f" Sample {i} : {pitch} at {time[t]}")
+            nb_events = len(self.yvals[i])
+            scoreframe = np.zeros((nb_events*2, 3))
+            for j in range(nb_events):
+                event = self.yvals[i,j]
+                scoreframe[int(2*j)] = np.array([event["time0"], event["pitch"], event["vol"]]) # when to turn on
+                scoreframe[int(2*j+1)] = np.array([event["time1"], event["pitch"], 0])          # when to turn off
+            scoreframe = scoreframe[scoreframe[:,0].argsort()] # chronological
+            samplescore = ""
+            for event in scoreframe:
+                if event[-1] == 0: # "off" event
+                    samplescore += "2, " + str(event[0]) + ", note_off_c , 1, " + str(event[1]) + ", 0"  + "\n"
+                else:              # "on" event
+                    samplescore += "2, " + str(event[0])   + ", note_on_c , 1, " + str(event[1]) + ", " + str(event[2]) + "\n"
+            self._score.append(samplescore)
 
     def export_csv(self, outdir, towav=True):
         absolute_outdir = "/home/greg/PickPen/midi_conversion/"+ outdir + "/"
@@ -102,9 +112,9 @@ class Wavegen():
                 output.close()
             if towav:
                 subprocess.run(["midi_conversion/midicsv11/csv2wav.sh", outdir, filename])
-        np.savez(absolute_outdir + 'yvals', self.yvals)
-        self.tconfig.update_tconfig()
-        self.tconfig.save_toml(outdir)
+        np.savez(absolute_outdir + 'yvals', yvals = self.yvals)
+        #self.tconfig.update_tconfig()
+        self.tconfig.save_toml(absolute_outdir)
 
     def midi_idx(self, notename):
         octave = notename[-1]
@@ -143,11 +153,10 @@ def main():
         logger.info(f" args: {args.t}")
 
     wavg = Wavegen(config)
-    wavg.nb_samples = 4
+    wavg.nb_samples = 10
     wavg.draw_yvals()
-    print(wavg.yvals)
     wavg.generate_scores()
-    wavg.export_csv("output")
+    wavg.export_csv("n10_output")
 
 if __name__ == "__main__":
     main()
