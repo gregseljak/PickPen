@@ -1,9 +1,10 @@
-import numpy as np
+import logging
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 import toml_config
 from scipy.io import wavfile
-import logging 
+import seglearn
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class WavPrep():
         
         if loaddir is not None:
             self.load(loaddir)
-        self._rs = np.random.RandomState(self.seed)
+            self._rs = np.random.RandomState(self.seed)
 
     def load(self, indir):
         
@@ -50,15 +51,15 @@ class WavPrep():
                 self.tconfig.parent = self
 
             elif file.endswith(".npz"):
-                self.yvals = np.load(abs_indir+file)
+                self.yvals = (np.load(abs_indir+file, allow_pickle=True))["yvals.npy"]
             elif file.endswith(".wav"):
                 delimit1 = -1*file[::-1].find("_")
                 sample_idx = int(file[delimit1: -4])
                 bitrate, data = wavfile.read(abs_indir+file)
                 self.xvals[sample_idx, :,:] = data
-                logger.info(" loaded " + file + f" to xval[{ sample_idx }]")
+                logger.debug(" loaded " + file + f" to xval[{ sample_idx }]")
             else:
-                logger.info(" file " + file + " not loaded; unrecognized name convention")
+                logger.debug(" file " + file + " not loaded; unrecognized name convention")
 
     def fnote(self, note):
         """ equal temper
@@ -76,6 +77,21 @@ class WavPrep():
             for channel in self.samples[i]:
                 plt.plot(time, channel, color=("C"+str(i)), label=self.yvals[i])
         return None
+
+    def segment(self, start_bit, nb_bits):
+        self.nb_samples = len(self.xvals)
+        nb_notes = self.range[1] - self.range[0] + 1
+        t0 = start_bit * self.bitrate
+        tf = t0 + nb_bits/self.bitrate
+        yvals = np.zeros((self.nb_samples, nb_notes))
+        xvals = np.zeros((self.nb_samples, 1, nb_bits))
+        for i in range(self.nb_samples):
+            xvals[i,0,:] = self.xvals[i,0,start_bit:start_bit+nb_bits]
+            for event in self.yvals[i,:]:
+                print(str(event["time0"]) + f" || t0 = {t0}, tf = {tf}")
+                if (event["time0"] >= t0 and event["time0"] < tf):
+                    yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
+        return xvals, yvals
 
 def main():
     import argparse
@@ -95,6 +111,7 @@ def main():
 
 
     prep = WavPrep(args.i)
-    
+
+
 if __name__ == "__main__":
     main()

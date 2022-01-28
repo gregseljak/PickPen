@@ -7,8 +7,10 @@ import torch.autograd as grad
 import torch.utils.data as Data
 import toml_config
 import model_library
+import wav_preprocess
 from datetime import datetime
 import matplotlib.pyplot as plt
+from scipy.io import wavfile
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
         +f" std_err valid {np.round(epoch_ste[epoch, 1, :], precision)}")
     return epoch_loss, epoch_ste
 
-def quickload(dirname):
+def load_npz(dirname):
     x_data = np.load("./" + dirname + "/xdata.npz")
     x_data = x_data[(x_data.__dict__["files"])[0]]
     y_data = np.load("./"+ dirname + "/ydata.npy")
@@ -105,7 +107,13 @@ def quickload(dirname):
     logger.info(f" __________________________\n")
     return x_data, y_data
 
+def load_wav(dirname):
+    bitrate, data = wavfile.read(dirname + "/sample1.wav")
+    plt.plot(data)
+    plt.show()
+
 def main():
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", type=int, default=3,
@@ -132,11 +140,15 @@ def main():
 
     if args.t:
         config = toml_config.TConfig(args.t)
-    config.model_name = "starter"
+    config.model_name = "starter_twos"
     config.translate_args(parser)
-    x_data, y_data = quickload("cos_n256")
+    wavdata = wav_preprocess.WavPrep("./midi_conversion/n1000_output")
+    x_data, y_data = wavdata.xvals, wavdata.yvals
     model = initialize_CNN(x_data, y_data, config)
-    e_std, e_ste = train_CNN(model, x_data, y_data, 32, config.epochs, 0.01)
+    e_std, e_ste = train_CNN(model, x_data, y_data, 64, config.epochs, 0.01)
+    torch.save(model, "./models/"+ "n1000_jan25" +".pth")
+
+    
 if __name__ == "__main__":
     main()
 
