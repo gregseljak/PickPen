@@ -28,19 +28,19 @@ class WavPrep():
             return None
         abs_indir = os.path.abspath(indir) + "/"
 
-        nbs = 0
+        nbs = 0 # number of sample files
         for file in os.listdir(abs_indir):
             if file.endswith(".wav"):
                 if nbs == 0:
-                    nbb = ((wavfile.read(abs_indir+file))[1]).shape
+                    nbb = ((wavfile.read(abs_indir+file))[1]).shape # np.ndims() changes based on whether the file is mono or stereo
                     if len(nbb) == 1:
-                        nbc = 1
+                        nbc = 1 # number of channels
                     else:
                         nbc = nbb[0]
-                    nbb = nbb[-1]
+                    nbb = nbb[-1]   # number of bits per channel
                 nbs += 1
 
-        self.xvals = np.empty((nbs, nbc, nbb))
+        self.xvals = np.empty((nbs, nbc, nbb)) # samples, channels, bits; pytorch convention
        
         for file in os.listdir(abs_indir):
             if file.endswith(".toml"):
@@ -58,8 +58,11 @@ class WavPrep():
                 bitrate, data = wavfile.read(abs_indir+file)
                 self.xvals[sample_idx, :,:] = data
                 logger.debug(" loaded " + file + f" to xval[{ sample_idx }]")
+                if bitrate != self.bitrate:
+                    logger.warning(f" Directory .toml file bitrate [{self.bitrate}] differs from {file} metadata bitrate [{bitrate}] ")
             else:
                 logger.debug(" file " + file + " not loaded; unrecognized name convention")
+            
 
     def fnote(self, note):
         """ equal temper
@@ -78,30 +81,46 @@ class WavPrep():
                 plt.plot(time, channel, color=("C"+str(i)), label=self.yvals[i])
         return None
 
-    def segment(self, start_bit, nb_bits):
-        self.nb_samples = len(self.xvals)
+    def _segment(self, start_bit, nb_bits, listen_window):
+        """
+        returns 1) xvals: the x values from [start_bit, start_bit+nb_bits] for each sample
+                2) yvals: a translated list of events in the score that fall within the listen subinterval
+                            returned in relative midi matrix format
+                ex// all the bits   from 22050b to 44100b (0.50s to 1.00s)
+                     all the events from  0.75s to 0.875s
+        """
         nb_notes = self.range[1] - self.range[0] + 1
-        t0 = start_bit * self.bitrate
-        tf = t0 + nb_bits/self.bitrate
+        t0 = (start_bit + listen_window[0]) / self.bitrate * 1000
+        tf = (start_bit + listen_window[1]) / self.bitrate * 1000   # in milliseconds
+#        print(f" t0, tf {(t0, tf)}")
         yvals = np.zeros((self.nb_samples, nb_notes))
         xvals = np.zeros((self.nb_samples, 1, nb_bits))
         for i in range(self.nb_samples):
             xvals[i,0,:] = self.xvals[i,0,start_bit:start_bit+nb_bits]
             for event in self.yvals[i,:]:
-                #print(str(event["time0"]) + f" || t0 = {t0}, tf = {tf}")
                 if (event["time0"] >= t0 and event["time0"] < tf):
                     yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
-        #print(f" shape: {xvals.shape} || {yvals.shape}")
         return xvals, yvals
 
-    def render_segments(self, startbit = 0, window_bits = 4410):
+    def render_segments(self, window_bits = 44100*0.50, sensitivity=44100*0.125, center = 0.5):
         """ returns arrays of segmented subsamples from the wavs """
+        bit0 = int(center*window_bits - sensitivity)
+        bitf = int(center*window_bits + sensitivity)
+        if (bitf > window_bits) or (bit0 < 0):
+            logging.warning(f""" {self.__str__}. render_segments() sensitivity window {bit0}:{bitf}
+                exceeds segment window {window_bits}; \n Defaulting to segment boundary """)
+            if bitf > window_bits :
+                bitf = window_bits - 1
+            if bit0 < 0:
+                bit0 = 0
+        nb_segs = int(((self.xvals.shape[2])//window_bits))
         self.nb_samples = len(self.xvals)
-        nb_segs = ((self.xvals.shape[2])//window_bits)
-        xvals = np.zeros((nb_segs * self.nb_samples,1, window_bits))
-        yvals = np.zeros((nb_segs * self.nb_samples, self.range[1] - self.range[0] + 1))
+        window = int(window_bits)
+        xvals = np.zeros((int(nb_segs*self.nb_samples),1, window))
+        yvals = np.zeros((int(nb_segs*self.nb_samples), self.range[1] - self.range[0] + 1))
         for j in range(nb_segs):
-            xvals[j::nb_segs], yvals[j::nb_segs,:] = self.segment(startbit + window_bits*j, window_bits)
+            xvals[j:: nb_segs], yvals[j::nb_segs,:] = self._segment(int(window)*j, window, (bit0,bitf))
+        print(np.max(yvals))
         yvals = np.expand_dims(yvals, axis=1)
         yvals = yvals/np.max(yvals)
         return xvals, yvals
