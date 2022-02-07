@@ -27,7 +27,7 @@ CONF_MAKE = {
         "nb_samples" : 256,
         "nb_channels" : 1,
         "duration" : 3000,
-        "bitrate" : 14400,
+        "bitrate" : 44100,
         "seed": 12345,
     },
     "variations" : {
