@@ -142,11 +142,12 @@ def main():
         config = toml_config.TConfig(args.t)
     config.model_name = "starter_twos"
     config.translate_args(parser)
-    wavdata = wav_preprocess.WavPrep("./midi_conversion/n1000_output")
-    x_data, y_data = wavdata.xvals, wavdata.yvals
+    wavdata = wav_preprocess.WavPrep("./midi_conversion/n10_output")
+
+    x_data, y_data = wavdata.render_segments()
     model = initialize_CNN(x_data, y_data, config)
     e_std, e_ste = train_CNN(model, x_data, y_data, 64, config.epochs, 0.01)
-    torch.save(model, "./models/"+ "n1000_jan25" +".pth")
+    torch.save(model, "./models/"+ "n10_jan28" +".pth")
 
     
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ CONF_MAKE = {
         "seed": 12345,
     },
     "variations" : {
-        "range" : [60, 80],
+        "range" : [68, 81],
         "y_2" : 0,
         "noise"       : 0.05,
         "noisetype" : "normal",
@@ -52,11 +52,11 @@ class TConfig():
             try:        
                 self.filetype = str(os.path.basename(main.__file__))
             except AttributeError:
-                self.filetype="zb_learn"
+                self.filetype="pkpn_train"
             if self.filetype.endswith(".py"):
                 self.filetype = self.filetype[:-3]
             if self.filetype not in self.configs.keys():
-                self.filetype = "zb_learn"
+                self.filetype = "pkpn_train"
         if parfile:
             self.dict = toml.load(parfile)
         else:

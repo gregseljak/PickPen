@@ -88,11 +88,24 @@ class WavPrep():
         for i in range(self.nb_samples):
             xvals[i,0,:] = self.xvals[i,0,start_bit:start_bit+nb_bits]
             for event in self.yvals[i,:]:
-                print(str(event["time0"]) + f" || t0 = {t0}, tf = {tf}")
+                #print(str(event["time0"]) + f" || t0 = {t0}, tf = {tf}")
                 if (event["time0"] >= t0 and event["time0"] < tf):
                     yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
+        #print(f" shape: {xvals.shape} || {yvals.shape}")
         return xvals, yvals
 
+    def render_segments(self, startbit = 0, window_bits = 4410):
+        """ returns arrays of segmented subsamples from the wavs """
+        self.nb_samples = len(self.xvals)
+        nb_segs = ((self.xvals.shape[2])//window_bits)
+        xvals = np.zeros((nb_segs * self.nb_samples,1, window_bits))
+        yvals = np.zeros((nb_segs * self.nb_samples, self.range[1] - self.range[0] + 1))
+        for j in range(nb_segs):
+            xvals[j::nb_segs], yvals[j::nb_segs,:] = self.segment(startbit + window_bits*j, window_bits)
+        yvals = np.expand_dims(yvals, axis=1)
+        yvals = yvals/np.max(yvals)
+        return xvals, yvals
+        
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -111,7 +124,8 @@ def main():
 
 
     prep = WavPrep(args.i)
-
-
+    x, y = prep.render_segments()
+    print(x.shape)
+    print(y.shape)
 if __name__ == "__main__":
     main()
