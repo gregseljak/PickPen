@@ -92,7 +92,7 @@ class WavPrep():
         nb_notes = self.range[1] - self.range[0] + 1
         t0 = (start_bit + listen_window[0]) / self.bitrate * 1000
         tf = (start_bit + listen_window[1]) / self.bitrate * 1000   # in milliseconds
-#        print(f" t0, tf {(t0, tf)}")
+        #print(f"{start_bit} || {start_bit+listen_window[0]} | {start_bit+listen_window[1]} || {start_bit+ nb_bits}")
         yvals = np.zeros((self.nb_samples, nb_notes))
         xvals = np.zeros((self.nb_samples, 1, nb_bits))
         for i in range(self.nb_samples):
@@ -102,10 +102,10 @@ class WavPrep():
                     yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
         return xvals, yvals
 
-    def render_segments(self, window_bits = 44100*0.50, sensitivity=44100*0.125, center = 0.5):
+    def render_segments(self, window_bits = 44100*0.50, sensitivity=44100*0.125, origin = 0.5):
         """ returns arrays of segmented subsamples from the wavs """
-        bit0 = int(center*window_bits - sensitivity)
-        bitf = int(center*window_bits + sensitivity)
+        bit0 = int(origin*window_bits - sensitivity)
+        bitf = int(origin*window_bits + sensitivity)
         if (bitf > window_bits) or (bit0 < 0):
             logging.warning(f""" {self.__str__}. render_segments() sensitivity window {bit0}:{bitf}
                 exceeds segment window {window_bits}; \n Defaulting to segment boundary """)
@@ -113,13 +113,14 @@ class WavPrep():
                 bitf = window_bits - 1
             if bit0 < 0:
                 bit0 = 0
-        nb_segs = int(((self.xvals.shape[2])//window_bits))
+        nb_segs = int(((self.xvals.shape[2] - (window_bits - 2*sensitivity))//(2*sensitivity)))
         self.nb_samples = len(self.xvals)
         window = int(window_bits)
         xvals = np.zeros((int(nb_segs*self.nb_samples),1, window))
         yvals = np.zeros((int(nb_segs*self.nb_samples), self.range[1] - self.range[0] + 1))
         for j in range(nb_segs):
-            xvals[j:: nb_segs], yvals[j::nb_segs,:] = self._segment(int(window)*j, window, (bit0,bitf))
+            startbit = int(j*(2*sensitivity))
+            xvals[j:: nb_segs], yvals[j::nb_segs,:] = self._segment(startbit, window, (bit0,bitf))
         print(np.max(yvals))
         yvals = np.expand_dims(yvals, axis=1)
         yvals = yvals/np.max(yvals)
