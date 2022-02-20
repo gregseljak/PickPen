@@ -153,10 +153,10 @@ def main():
         logger.info(f" args: {args.t}")
 
     wavg = Wavegen(config)
-    wavg.nb_samples = 10
+    wavg.nb_samples = 20
     wavg.draw_yvals()
     wavg.generate_scores()
-    wavg.export_csv("n10_output")
+    wavg.export_csv("n20_output")
 
 if __name__ == "__main__":
     main()

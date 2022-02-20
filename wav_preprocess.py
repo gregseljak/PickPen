@@ -12,8 +12,8 @@ class WavPrep():
     """
     Load samples and treat them as needed before handing off to pkpn_train
     """
-    def __init__(self, loaddir = None):
-        
+    def __init__(self, loaddir = None, vol_threshold=None):
+        self.volthreshold = vol_threshold
         if loaddir is not None:
             self.load(loaddir)
             self._rs = np.random.RandomState(self.seed)
@@ -66,7 +66,7 @@ class WavPrep():
 
     def fnote(self, note):
         """ equal temper
-        # accepts midi note value ex fnote(69); return 440.0
+        # accepts midi note value ex fnote(69);   return 440.0
         # or equivalently snn     ex fnote("A4"); return 440.0
         """
         halftone_idx = note
@@ -98,8 +98,15 @@ class WavPrep():
         for i in range(self.nb_samples):
             xvals[i,0,:] = self.xvals[i,0,start_bit:start_bit+nb_bits]
             for event in self.yvals[i,:]:
+                value = 0
                 if (event["time0"] >= t0 and event["time0"] < tf):
+                    if self.volthreshold == None:
+                        value = event["vol"]
+                    else:
+                        value = ((int(event["vol"] > self.volthreshold[0])) +  (int(event["vol"] > self.volthreshold[1])))/2
                     yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
+
+
         return xvals, yvals
 
     def render_segments(self, window_bits = 44100*0.50, sensitivity=44100*0.125, origin = 0.5):
