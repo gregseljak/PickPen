@@ -30,7 +30,7 @@
 
     --------------------------------- divers --------------------
     5. toml_config.py
-        - utilité pour faciliter le module argparse avec les fichiers de configuration .toml
+        - interface pour faciliter le module argparse avec des fichiers de configuration .toml
 
     6. model_library.py
         - stockage des archictures pour qu'elles soient disponibles à pkpn_train.py
