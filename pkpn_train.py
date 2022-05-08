@@ -28,6 +28,7 @@ def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_func = torch.nn.MSELoss(reduction="none")
     par_ct = y_data.shape[-1]
+
     x, y = grad.Variable(torch.from_numpy(x_data)), grad.Variable(torch.from_numpy(y_data))
     torch_dataset = Data.TensorDataset(x, y)
     dataset_size = len(torch_dataset)
@@ -54,7 +55,6 @@ def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
         for step, (batch_x, batch_y) in enumerate(loader):  # for each training step
             b_x = grad.Variable(batch_x)
             b_y = grad.Variable(batch_y)
-
             # input x and predict based on x
             prediction = model(b_x.float())
 
@@ -87,43 +87,32 @@ def train_CNN(model, x_data, y_data, batch_size, epochs, lr, valid_split=0.2):
         if epoch == 0:
             logger.info(f" Training on {len(list(enumerate(loader)))} batches")
             logger.info(f" Validate on {len(list(enumerate(valid_loader)))} batches")
+            logger.info(f" Average training per pitch:")
         precision = 4
-        logger.info(f"epoch {epoch}: train loss {np.round(epoch_loss[epoch, 0,:], precision)} :"
-            +f"valid loss {np.round(epoch_loss[epoch, 1,:], precision)}")
-        logger.info(f"          std_err train {np.round(epoch_ste[epoch, 0, :], precision)} :"
-        +f" std_err valid {np.round(epoch_ste[epoch, 1, :], precision)}")
-    return epoch_loss, epoch_ste
+        logger.info(f"epoch {epoch}: train loss {np.round(np.mean(epoch_loss[epoch, 0,:]), precision)} :"
+            +f"valid loss {np.round(np.mean(epoch_loss[epoch, 1,:]), precision)}")
+        logger.info(f"          std_err train {np.round(np.mean(epoch_ste[epoch, 0, :]), precision)} :"
+        +f" std_err valid {np.round(np.mean(epoch_ste[epoch, 1, :]), precision)}")
 
-def load_npz(dirname):
-    x_data = np.load("./" + dirname + "/xdata.npz")
-    x_data = x_data[(x_data.__dict__["files"])[0]]
-    y_data = np.load("./"+ dirname + "/ydata.npy")
-    while np.ndim(y_data) < 3:
-        y_data = np.expand_dims(y_data, -1)
-    logger.info("      Quickload successful")
-    logger.info("__________________________")
-    logger.info(f" x_data.shape {x_data.shape}")
-    logger.info(f" y_data.shape {y_data.shape}")
-    logger.info(f" __________________________\n")
-    return x_data, y_data
+    return epoch_loss, epoch_ste
 
 def load_wav(dirname):
     bitrate, data = wavfile.read(dirname + "/sample1.wav")
     plt.plot(data)
     plt.show()
 
-def main():
 
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", type=int, default=3,
         help=("set logging level: 0 critical, 1 error, "
                 "2 warning, 3 info, 4 debug, default=info"))
-    parser.add_argument("-i", default=None, type=str,
+    parser.add_argument("-i", default=None, type=str, metavar = "fname_in",
         help="training/validation dataset")
-    parser.add_argument("-e", default=None, type=int, 
+    parser.add_argument("-e", default=None, type=int, metavar="epochs",
         help='epochs')
-    parser.add_argument("-lr", type=float, default=None, 
+    parser.add_argument("-lr", type=float, default=None, metavar="lr",
         help=" -log10 of learning rate (ex. 2 -> 0.01)")
     parser.add_argument("-t", type=str, default=None,
                         help="See toml_config.py")
@@ -140,15 +129,35 @@ def main():
 
     if args.t:
         config = toml_config.TConfig(args.t)
-    config.model_name = "starter_twos"
+
+    config.model_name = "starter"
     config.translate_args(parser)
+
+    # Something is wrong here
+
     wavdata = wav_preprocess.WavPrep(args.i)
-
+    wavdata.fourier = False
     x_data, y_data = wavdata.render_segments()
+    print(f"ydatadim {y_data.shape}")
+    #x_data = (x_data[:,:,10000:15000:37])[:,:,5:-3]
     model = initialize_CNN(x_data, y_data, config)
+    v = model.forward(torch.from_numpy(x_data).float())
     e_std, e_ste = train_CNN(model, x_data, y_data, 64, config.epochs, 0.01)
-    torch.save(model, "./models/"+ "n20_jan28" +".pth")
 
+
+
+    # naming conventions
+    from datetime import datetime
+    now = datetime.now()
+    dt_string = now.strftime("_%d%m/%Y _%H%M:%S")
+    dm = dt_string[1:5]
+    idx = (dt_string[5:]).find("_") + 5
+    hm = dt_string[idx:idx+5]
+    fname = dm + hm
+    os.mkdir("./models/"+fname)
+    torch.save(model, "./models/"+ fname +"/"+fname+".pth")
+    config.save_toml("./models/"+ fname)
+    logger.info(f" Dumped to ./models/{fname}")
     
 if __name__ == "__main__":
     main()

@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import toml_config
 from scipy.io import wavfile
-import seglearn
+
 
 logger = logging.getLogger(__name__)
 
@@ -12,17 +12,21 @@ class WavPrep():
     """
     Load samples and treat them as needed before handing off to pkpn_train
     """
-    def __init__(self, loaddir = None, vol_threshold=None):
-        self.volthreshold = vol_threshold
+    def __init__(self, loaddir = None, volthreshold=None):
         if loaddir is not None:
             self.load(loaddir)
+            self.volthreshold = volthreshold
             self._rs = np.random.RandomState(self.seed)
+        else:
+            logger.warning(" WavPrep class expects prerender .wav files to manipulate")
+        self.fourier = False
+
 
     def load(self, indir):
         
         loaddir = indir
         if not (indir.startswith("./")):
-           loaddir += "./" 
+           loaddir = "./" + loaddir
         if not (os.path.isdir(loaddir)):
             logger.error(" WavPrep err - directory " + loaddir + " not found ")
             return None
@@ -45,10 +49,8 @@ class WavPrep():
         for file in os.listdir(abs_indir):
             if file.endswith(".toml"):
                 self.tconfig = toml_config.TConfig(abs_indir + file, "pkpn_synthgen")
-                for section in self.tconfig.dict:
-                    for item in self.tconfig.dict[section]:
-                        setattr(self, str(item), getattr(self.tconfig, str(item)))
                 self.tconfig.parent = self
+                self.tconfig.update_parent()
 
             elif file.endswith(".npz"):
                 self.yvals = (np.load(abs_indir+file, allow_pickle=True))["yvals.npy"]
@@ -92,7 +94,6 @@ class WavPrep():
         nb_notes = self.range[1] - self.range[0] + 1
         t0 = (start_bit + listen_window[0]) / self.bitrate * 1000
         tf = (start_bit + listen_window[1]) / self.bitrate * 1000   # in milliseconds
-        #print(f"{start_bit} || {start_bit+listen_window[0]} | {start_bit+listen_window[1]} || {start_bit+ nb_bits}")
         yvals = np.zeros((self.nb_samples, nb_notes))
         xvals = np.zeros((self.nb_samples, 1, nb_bits))
         for i in range(self.nb_samples):
@@ -101,12 +102,11 @@ class WavPrep():
                 value = 0
                 if (event["time0"] >= t0 and event["time0"] < tf):
                     if self.volthreshold == None:
-                        value = event["vol"]
+                        value = event["vol"]/100
                     else:
-                        value = ((int(event["vol"] > self.volthreshold[0])) +  (int(event["vol"] > self.volthreshold[1])))/2
-                    yvals[i, (event["pitch"] - self.range[0])] = event["vol"]
-
-
+                        for level in self.volthreshold:
+                            value += int(event["vol"] > level)/len(self.volthreshold)
+                    yvals[i, (event["pitch"] - self.range[0])] = value
         return xvals, yvals
 
     def render_segments(self, window_bits = 44100*0.50, sensitivity=44100*0.125, origin = 0.5):
@@ -131,8 +131,11 @@ class WavPrep():
         print(np.max(yvals))
         yvals = np.expand_dims(yvals, axis=1)
         yvals = yvals/np.max(yvals)
-        return xvals, yvals
-        
+        if self.fourier:
+            xvals = np.fft.fft(xvals)
+        abx_max = np.max(xvals) # stupid method
+        return xvals/abx_max, yvals
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -143,7 +146,6 @@ def main():
                          logging.INFO, logging.DEBUG]
     parser.add_argument("-i", default=None, type=str,
         help="training/validation dataset")
-    logger = None
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging_translate[args.v])
@@ -152,7 +154,21 @@ def main():
 
     prep = WavPrep(args.i)
     x, y = prep.render_segments()
-    print(x.shape)
-    print(y.shape)
+    return x,y
+
+    
 if __name__ == "__main__":
-    main()
+    import matplotlib.patches as patch
+    x,y = main()
+    n = np.random.randint(0, len(y), size=5)
+    print(n)
+    print(y[n])
+    fig, ax = plt.subplots(len(n))
+    xmx = np.max(x)
+    print(f"x,y shapes: {x.shape, y.shape}")
+    for i in range(len(ax)):
+        ax[i].plot(x[n[i],0])
+        ax[i].title.set_text(y[n[i],0])
+        ax[i].add_patch(patch.Rectangle((0.25*len(x[0,0]),-xmx), 0.5*len(x[0,0]), 2*xmx, fill=False, color="red"))
+    fig.tight_layout()
+    plt.show()
