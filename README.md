@@ -21,6 +21,7 @@
         longeurs uniformes au modèles.
         - Actuellement aussi fait la distinction [fenetre visible / fenetre sensible]
             ce qui devrait etre un attribut du modele (à regler plus tard)
+   Veuillez consulter le page "issues" de ce github pour voir une image de cette stratégie de traitement
     
     4. pkpn_evaluate.py
         - simulation de la vraie exécution du produit
